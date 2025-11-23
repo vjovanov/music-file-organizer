@@ -1,6 +1,6 @@
-# Song Organizer (Shazam-based) 🎵
+# Music File Organizer (Shazam-based) 🎵
 
-Recognize your music library using Shazam-based recognition, then copy or move files into a clean Artist/Album/Song (or similar) structure.
+Recognize your music files using Shazam-based recognition, then copy or move files into a clean Artist/Album/Song (or similar) structure.
 
 ## 🚀 Quick Start
 
