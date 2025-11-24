@@ -98,18 +98,9 @@ python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%S" --appl
 
 ---
 
-## ⚙️ Install
+## 🎧 Supported audio formats
 
-Requires: Python 3.8+ and `shazamio`
-
-Recommended (virtualenv):
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install shazamio
-```
+`.mp3`, `.m4a`, `.aac`, `.ogg`, `.opus`, `.wav`, `.flac`, `.wma`, `.mp4`, `.mkv`
 
 ---
 
@@ -128,13 +119,7 @@ Notes ℹ️
 
 ---
 
-## 🎧 Supported audio formats
-
-`.mp3`, `.m4a`, `.aac`, `.ogg`, `.opus`, `.wav`, `.flac`, `.wma`, `.mp4`, `.mkv`
-
----
-
-## 🧭 CLI reference (concise)
+## 🧭 CLI reference
 
 ### batch_recognize.py
 
@@ -167,46 +152,6 @@ Notes ℹ️
 --duplicates-json PATH         Write duplicates report JSON (default: duplicates.json)
 --keep-unknowns                Keep 'Unknown' values in path components (by default they are dropped)
 --duplicate-token STR          Marker used for disambiguating duplicates (default: "_duplicate_")
-```
-
----
-
-## ✅ Validate output (optional)
-
-A JSON Schema is provided in `recognized.schema.json`.
-
-Quick check:
-
-```bash
-pip install jsonschema
-python - << 'PY'
-import json
-from jsonschema import validate, Draft202012Validator
-with open("recognized-songs.json","r",encoding="utf-8") as f: data = json.load(f)
-with open("recognized.schema.json","r",encoding="utf-8") as f: schema = json.load(f)
-Draft202012Validator.check_schema(schema)
-validate(instance=data, schema=schema)
-print("OK: recognized-songs.json validates against recognized.schema.json")
-PY
-```
-
-## 🧪 Validate Shazam input (optional)
-
-A JSON Schema is provided in `shazam_input.schema.json`. A sample Shazam payload is included at `build/shazam.sample.json`.
-
-Quick check:
-
-```bash
-pip install jsonschema
-python - << 'PY'
-import json
-from jsonschema import validate, Draft202012Validator
-with open("build/shazam.sample.json","r",encoding="utf-8") as f: data = json.load(f)
-with open("shazam_input.schema.json","r",encoding="utf-8") as f: schema = json.load(f)
-Draft202012Validator.check_schema(schema)
-validate(instance=data, schema=schema)
-print("OK: build/shazam.sample.json validates against shazam_input.schema.json")
-PY
 ```
 
 ---
