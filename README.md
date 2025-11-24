@@ -74,6 +74,28 @@ Pattern placeholders 🧩:
 - `%E` Explicit|Clean, `%e` true|false
 - `%a` artist adamid, `%T` Apple Music track id, `%U` Apple Music album id
 
+
+Duplicate handling and marker 🧭:
+
+- When multiple different source files map to the same destination path, the first unique file keeps the plain name, for example: "Song.mp3".
+- Each subsequent unique file is saved as "Song<token><OriginalSourceBasename>.mp3", where:
+  - <token> is a configurable marker (default: "_duplicate_")
+  - <OriginalSourceBasename> is the source file's basename without extension, sanitized for filesystem safety
+- If that still conflicts, a numeric suffix is appended: "Song<token><Original>_2.mp3", etc.
+
+Customize the duplicate marker:
+
+```bash
+# Use the default marker (underscored)
+python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%S" --apply --duplicate-token "_duplicate_"
+
+# Use a compact marker
+python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%S" --apply --duplicate-token "--"
+
+# Use a human-friendly marker with spaces/parentheses (will be sanitized)
+python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%S" --apply --duplicate-token " (duplicate) "
+```
+
 ---
 
 ## ⚙️ Install
@@ -142,6 +164,9 @@ Notes ℹ️
 --apply                        Perform the copy/move (otherwise dry-run)
 --move                         Move instead of copy
 -v, --verbose                  Print per-file actions
+--duplicates-json PATH         Write duplicates report JSON (default: duplicates.json)
+--keep-unknowns                Keep 'Unknown' values in path components (by default they are dropped)
+--duplicate-token STR          Marker used for disambiguating duplicates (default: "_duplicate_")
 ```
 
 ---
