@@ -18,26 +18,26 @@ Organize recognized music files into a directory structure defined by a pattern:
 Key features:
 - Default behavior is COPY (non-destructive). Use --move to move instead.
 - Dry-run by default; use --apply to actually copy/move files.
-- Duplicates (same sanitized author/album/song) are all kept by suffixing the
-  filename with _n (e.g., "Song.mp3", "Song_2.mp3", "Song_3.mp3", ...).
-- Prints a detailed list of detected duplicates.
+- Identical files (bit-for-bit) are NOT duplicated; only one copy is kept.
+- For differing contents that map to the same destination, subsequent files are named
+  with the original source basename after a configurable duplicate token (default: "_duplicate_"), e.g.,
+  "Song.mp3", "Song_duplicate_OriginalName.mp3", and only if that conflicts use "Song_duplicate_OriginalName_2.mp3".
+- Writes a detailed duplicates report to JSON (duplicates.json by default) and notes identical ones skipped.
 - Skips missing sources and reports them.
 - Produces stable, cross-platform-safe path components via sanitization.
-
-Testing notes (from AGENTS.md):
-- Default destination root is current directory '.'. Examples use './build' for safety in docs/tests.
-- Never modifies the input music directory unless you explicitly set --dest-root.
 """
 
 import argparse
 import json
 import os
 import re
+import hashlib
 import shutil
 import sys
 import unicodedata
 from collections import defaultdict
 from typing import Dict, List, Tuple
+from datetime import datetime, timezone
 
 
 def sanitize_component(s: str) -> str:
@@ -77,10 +77,33 @@ def sanitize_component(s: str) -> str:
     return s
 
 
+def is_unknown_text(text: str) -> bool:
+    """
+    Return True if a value represents an 'Unknown' placeholder that should be dropped
+    when --keep-unknowns is not set.
+    Matches case-insensitively:
+      - 'Unknown'
+      - 'Unknown <something>' e.g., 'Unknown Artist', 'Unknown Album', etc.
+    """
+    if text is None:
+        return True
+    t = str(text).strip().lower()
+    return t == "unknown" or t.startswith("unknown ")
+
+
 def load_mapping(path: str) -> Dict[str, dict]:
     """Load the recognized-songs mapping from JSON file."""
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def compute_file_hash(path: str, chunk_size: int = 1024 * 1024) -> str:
+    """Return SHA-256 hex digest of a file's content."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(chunk_size), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def add_suffix_to_filename(path: str, n: int) -> str:
@@ -115,28 +138,60 @@ def compute_unique_destination(base_dest: str, start_n: int = 1) -> Tuple[str, i
     return candidate, n
 
 
-def build_dest_rel_base(replacements: Dict[str, str], ext: str, pattern: str) -> str:
+def build_dest_rel_base(replacements: Dict[str, str], ext: str, pattern: str, keep_unknowns: bool = False) -> str:
     """
     Render the destination relative path (including extension) from a pattern.
 
+    Behavior:
     - Replaces placeholders using the provided replacements mapping (e.g., %A, %L, %S, %Y, %G, %B, %I, %E, %e, %a, %T, %U)
     - Splits on "/" to form directories
     - Sanitizes each path component
+    - Unless keep_unknowns is True, drops components that are 'Unknown' or 'Unknown ...'
+      and trims dangling punctuation around removed values
     - Appends the original file extension to the final leaf name
     """
+    # First, optionally blank-out unknown placeholder values to reduce noise inside parts
+    # (This helps when a part is solely a placeholder such as "%L".)
+    if not keep_unknowns:
+        replacements = {
+            k: ("" if is_unknown_text(v) else v)
+            for k, v in replacements.items()
+        }
+
     sub = pattern
     for k, v in replacements.items():
         sub = sub.replace(k, v)
+
     parts = [p for p in sub.split("/") if p not in ("", ".", "..")]
-    safe_parts = [sanitize_component(p) for p in parts]
+
+    safe_parts: List[str] = []
+    for p in parts:
+        comp = sanitize_component(p)
+        if not keep_unknowns and is_unknown_text(comp):
+            # Drop components that are just 'Unknown...' after sanitization
+            continue
+        if not keep_unknowns:
+            # Trim dangling punctuation/hyphens introduced by removed unknowns
+            comp = re.sub(r"^[\s\-_.(),;:]+|[\s\-_.(),;:]+$", "", comp)
+            comp = re.sub(r"\s{2,}", " ", comp).strip()
+        if comp:
+            safe_parts.append(comp)
+
     if not safe_parts:
-        # Fallback to core triplet
-        fallback = (
-            replacements.get("%A", "Unknown"),
-            replacements.get("%L", "Unknown"),
-            replacements.get("%S", "Unknown"),
-        )
-        safe_parts = [sanitize_component(x) for x in fallback]
+        # Fallback: use non-empty core triplet components if available; otherwise 'Unknown'
+        core = []
+        for key in ("%A", "%L", "%S"):
+            v = sanitize_component(replacements.get(key, ""))
+            if not keep_unknowns and is_unknown_text(v):
+                v = ""
+            if not keep_unknowns:
+                v = re.sub(r"^[\s\-_.(),;:]+|[\s\-_.(),;:]+$", "", v).strip()
+            if v:
+                core.append(v)
+        if not core:
+            core = ["Unknown"]
+        safe_parts = core
+
     file_stem = safe_parts[-1]
     dir_parts = safe_parts[:-1]
     if dir_parts:
@@ -154,7 +209,7 @@ def main():
             "%E (Explicit|Clean), %e (true|false), %a (artist adamid), %T (Apple track id), %U (Apple album id).\n"
             "- Default action is COPY (dry-run unless --apply is provided).\n"
             "- Use --move to move instead of copy.\n"
-            "- Duplicates are kept with _n suffix and listed."
+            "- Identical files are skipped; differing contents mapping to the same path are named with the original source basename after the configured duplicate token (default: '_duplicate_'), with numeric suffix added only on conflict, and listed."
         )
     )
     parser.add_argument(
@@ -173,9 +228,9 @@ def main():
         "-p",
         "--pattern",
         default="%A/%L/%S",
-        help=("Output path pattern using placeholders: %A=artist, %L=album, %S=song, "
-              "%Y=year, %G=genre, %B=label, %I=ISRC, %E=Explicit|Clean, %e=true|false, "
-              "%a=artist adamid, %T=Apple Music track id, %U=Apple Music album id. "
+        help=("Output path pattern using placeholders: %%A=artist, %%L=album, %%S=song, "
+              "%%Y=year, %%G=genre, %%B=label, %%I=ISRC, %%E=Explicit|Clean, %%e=true|false, "
+              "%%a=artist adamid, %%T=Apple Music track id, %%U=Apple Music album id. "
               "Final filename gets source extension."),
     )
     parser.add_argument(
@@ -190,6 +245,21 @@ def main():
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Print per-file planned actions."
+    )
+    parser.add_argument(
+        "--duplicates-json",
+        default="duplicates.json",
+        help="Path to write duplicates report JSON (default: duplicates.json)."
+    )
+    parser.add_argument(
+        "--keep-unknowns",
+        action="store_true",
+        help="Keep 'Unknown' values (e.g., 'Unknown Album') in the rendered path. By default, unknown values are dropped."
+    )
+    parser.add_argument(
+        "--duplicate-token",
+        default="_duplicate_",
+        help="Token inserted between base name and original source basename for duplicates (sanitized for filesystem safety). Default: '_duplicate_'."
     )
     args = parser.parse_args()
 
@@ -217,6 +287,7 @@ def main():
         print(f"Pattern: {args.pattern}")
         print("Mode:", "MOVE" if args.move else "COPY")
         print("Apply:", "YES" if args.apply else "NO (dry-run)")
+        print("Keep unknowns:", "YES" if args.keep_unknowns else "NO")
 
     sources = list(mapping.keys())
 
@@ -226,14 +297,26 @@ def main():
     total_entries = 0
 
     for src, meta in mapping.items():
-        total_entries += 1
-        if not isinstance(meta, dict):
-            # Skip malformed meta entries
+        # Skip non-dict entries and non-path keys like "$schema"
+        if not isinstance(meta, dict) or (isinstance(src, str) and src.startswith("$")):
             continue
+        total_entries += 1
 
-        author = meta.get("author") or "Unknown Artist"
-        album = meta.get("album") or "Unknown Album"
-        song = meta.get("song") or "Unknown Song"
+        # Respect unknown flags if present in recognized.schema.json; fall back to text heuristic
+        author_unknown = meta.get("author_unknown")
+        album_unknown = meta.get("album_unknown")
+        song_unknown = meta.get("song_unknown")
+
+        author = meta.get("author")
+        album = meta.get("album")
+        song = meta.get("song")
+
+        if author_unknown is True or is_unknown_text(author):
+            author = "Unknown Artist"
+        if album_unknown is True or is_unknown_text(album):
+            album = "Unknown Album"
+        if song_unknown is True or is_unknown_text(song):
+            song = "Unknown Song"
 
         author_s = sanitize_component(author)
         album_s = sanitize_component(album)
@@ -278,7 +361,7 @@ def main():
         }
 
         # Build destination relative base path (including extension) from pattern
-        dest_rel_base = build_dest_rel_base(replacements, ext, args.pattern)
+        dest_rel_base = build_dest_rel_base(replacements, ext, args.pattern, args.keep_unknowns)
 
         # Deduplicate case-insensitively on the final destination path
         key = dest_rel_base.lower()
@@ -302,13 +385,17 @@ def main():
             }
         )
 
-    # Plan operations: for each group, keep ALL occurrences
-    # First occurrence: Song.ext
-    # Subsequent occurrences: Song_2.ext, Song_3.ext, ...
+    # Plan operations:
+    # - Skip identical duplicates (bit-for-bit).
+    # - For differing contents that map to same destination:
+    #     First occurrence: Song.ext
+    #     Subsequent occurrences: Song_<OriginalSourceBasename>.ext
+    #     Only if that conflicts, add numeric suffix: Song_<Original>_2.ext, etc.
     ops = []  # planned operations for valid (non-missing) sources
-    duplicates_report = {}  # key -> list of (src, assigned_rel)
+    duplicates_report = {}  # key -> list of (src, assigned_rel) or (src, None, "skipped-identical")
     duplicate_groups = 0
-    total_duplicates = 0
+    total_duplicates_kept = 0
+    identical_duplicates_skipped = 0
 
     already_in_place = 0
     planned_copies = 0
@@ -320,28 +407,52 @@ def main():
         valid_items = [i for i in items if i["size"] >= 0]
         if len(valid_items) > 1:
             duplicate_groups += 1
-            total_duplicates += len(valid_items) - 1
 
-        # index within the group (1 => base name, >=2 => suffix)
-        group_index = 0
+        seen_hashes = set()
+        unique_count = 0
+
         for it in valid_items:
-            group_index += 1
+            # Compute content hash to detect identical files
+            try:
+                h = compute_file_hash(it["src"])
+            except Exception:
+                h = None  # Treat unreadable as unique to avoid accidental drops
+
+            if h is not None and h in seen_hashes:
+                identical_duplicates_skipped += 1
+                if len(valid_items) > 1:
+                    duplicates_report.setdefault(key, []).append((it["src"], None, "skipped-identical"))
+                continue
+
+            if h is not None:
+                seen_hashes.add(h)
+
+            unique_count += 1
 
             base_rel = it["dest_rel_base"]
             dest_abs_base = os.path.join(dest_root, base_rel)
 
-            # Pick starting suffix based on the ordinal within group
-            # Then ensure uniqueness against filesystem (so we never overwrite)
-            desired_n = group_index
-            unique_abs, final_n = compute_unique_destination(dest_abs_base, desired_n)
+            # Build candidate name:
+            # - First unique keeps base name
+            # - Subsequent uniques keep original source basename after "_"
+            if unique_count == 1:
+                candidate = dest_abs_base
+            else:
+                d = os.path.dirname(dest_abs_base)
+                base_name = os.path.basename(dest_abs_base)
+                stem, ext = os.path.splitext(base_name)
+                src_stem = sanitize_component(os.path.splitext(os.path.basename(it["src"]))[0])
+                safe_token = sanitize_component(args.duplicate_token)
+                candidate = os.path.join(d, f"{stem}{safe_token}{src_stem}{ext}")
+
+            # Ensure uniqueness against filesystem using numeric suffix only if needed
+            unique_abs, final_n = compute_unique_destination(candidate, 1)
             # Rebuild relative path from final unique abs to keep reporting tidy
             unique_rel = os.path.relpath(unique_abs, dest_root)
 
             # Track duplicates report (list all in the group if group size > 1)
             if len(valid_items) > 1:
-                if key not in duplicates_report:
-                    duplicates_report[key] = []
-                duplicates_report[key].append((it["src"], unique_rel))
+                duplicates_report.setdefault(key, []).append((it["src"], unique_rel))
 
             # Plan operation (skip no-op if source already equals destination)
             try:
@@ -372,6 +483,10 @@ def main():
                     "size": it["size"],
                 }
             )
+
+        # Track how many distinct duplicates are kept for this group
+        if len(valid_items) > 1 and unique_count > 1:
+            total_duplicates_kept += unique_count - 1
 
     # Apply operations if requested
     copies_performed = 0
@@ -419,7 +534,8 @@ def main():
     print(f"  Missing source files:   {len(missing_sources)}")
     print(f"  Already in place:       {already_in_place}")
     print(f"  Duplicate groups:       {duplicate_groups}")
-    print(f"  Total duplicate files:  {total_duplicates}")
+    print(f"  Distinct duplicates kept: {total_duplicates_kept}")
+    print(f"  Identical duplicates skipped: {identical_duplicates_skipped}")
     print(f"  Will copy (planned):    {planned_copies}")
     print(f"  Will move (planned):    {planned_moves}")
     if args.apply:
@@ -428,15 +544,54 @@ def main():
     else:
         print("  Mode: DRY-RUN (use --apply to perform operations)")
 
-    # Print duplicates list (as requested)
-    if duplicates_report:
-        print("\nDuplicates detected and their planned destination names:")
-        # Keyed by final destination base path (case-insensitive)
-        for key, entries in duplicates_report.items():
-            display_key = key
-            print(f"  - {display_key}:")
-            for idx, (src, rel) in enumerate(entries, start=1):
-                print(f"      {idx}) {src} -> {os.path.join(args.dest_root, rel)}")
+    # Write duplicates report to JSON instead of printing to console
+    duplicates_json_path = args.duplicates_json
+    try:
+        duplicates_dir = os.path.dirname(duplicates_json_path)
+        if duplicates_dir:
+            os.makedirs(duplicates_dir, exist_ok=True)
+        groups_json = []
+        for key in sorted(duplicates_report.keys()):
+            entries_json = []
+            for entry in duplicates_report[key]:
+                if len(entry) == 3 and entry[2] == "skipped-identical":
+                    entries_json.append({
+                        "src": entry[0],
+                        "status": "skipped-identical"
+                    })
+                else:
+                    src, rel = entry[0], entry[1]
+                    entries_json.append({
+                        "src": src,
+                        "planned_dest_rel": rel,
+                        "planned_dest_abs": os.path.join(args.dest_root, rel),
+                        "status": "planned"
+                    })
+            groups_json.append({"dest_key": key, "entries": entries_json})
+
+        schema_ref = os.path.relpath(
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "schemas", "duplicates.schema.json"),
+            start=os.path.dirname(os.path.abspath(duplicates_json_path))
+        )
+        report_json = {
+            "$schema": schema_ref,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "pattern": args.pattern,
+            "dest_root": os.path.abspath(args.dest_root),
+            "apply": bool(args.apply),
+            "mode": "MOVE" if args.move else "COPY",
+            "stats": {
+                "duplicate_groups": duplicate_groups,
+                "distinct_duplicates_kept": total_duplicates_kept,
+                "identical_duplicates_skipped": identical_duplicates_skipped
+            },
+            "groups": groups_json,
+        }
+        with open(duplicates_json_path, "w", encoding="utf-8") as f:
+            json.dump(report_json, f, indent=2, ensure_ascii=False)
+        print(f"  Duplicates report JSON written to: {duplicates_json_path}")
+    except Exception as e:
+        print(f"WARNING: Failed to write duplicates report JSON: {e}", file=sys.stderr)
 
     # Optionally list missing sources
     if missing_sources:

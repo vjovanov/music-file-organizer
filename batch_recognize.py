@@ -85,6 +85,20 @@ def list_audio_files(root: Path, recursive: bool) -> List[Path]:
     ]
 
 
+def is_unknown_text(text: Optional[str]) -> bool:
+    """
+    Return True if a value represents an 'Unknown' placeholder that should be dropped
+    when organizing later.
+    Matches case-insensitively:
+      - 'Unknown'
+      - 'Unknown <something>' e.g., 'Unknown Artist', 'Unknown Album', etc.
+    """
+    if text is None:
+        return True
+    t = str(text).strip().lower()
+    return t == "unknown" or t.startswith("unknown ")
+
+
 def extract_metadata(out: Dict[str, Any]) -> Optional[Dict[str, Optional[str]]]:
     """
     Try to extract {author, album, song} from shazamio response.
@@ -226,6 +240,11 @@ async def run(args) -> int:
             meta, err = await recognize_file(shazam, p, limiter, idx, total)
             async with progress_lock:
                 if meta:
+                    # Augment with unknown flags for downstream organizers/schemas
+                    meta = dict(meta)
+                    meta["author_unknown"] = is_unknown_text(meta.get("author"))
+                    meta["album_unknown"] = is_unknown_text(meta.get("album"))
+                    meta["song_unknown"] = is_unknown_text(meta.get("song"))
                     results[str(p)] = meta
             if err:
                 async with progress_lock:
@@ -251,15 +270,15 @@ async def run(args) -> int:
                 print(f"[PROGRESS] {processed}/{total} ({percent:.1f}%) {status}: {p}{details}", file=sys.stderr)
                 if args.dump_every and int(args.dump_every) > 0 and (processed % int(args.dump_every) == 0):
                     try:
-                        atomic_write_json(output_path, results)
+                        atomic_write_json(output_path, {"$schema": "https://example.com/schemas/recognized.schema.json", **results})
                         print(f"[INFO] Checkpoint: wrote {output_path} with {len(results)} entries after {processed}/{total} processed.", file=sys.stderr)
                     except Exception as e:
                         print(f"[WARNING] Failed to write checkpoint to {output_path}: {type(e).__name__}: {e}", file=sys.stderr)
 
     await asyncio.gather(*(worker(i, p) for i, p in enumerate(files, start=1)))
 
-    # Write output JSON
-    atomic_write_json(output_path, results)
+    # Write output JSON (include top-level $schema for validation)
+    atomic_write_json(output_path, {"$schema": "https://example.com/schemas/recognized.schema.json", **results})
 
     # Write errors log (JSON Lines: one object per line: {"file": "...", "error": "..."})
     errors_path = output_path.with_name(output_path.stem + ".errors.jsonl")
