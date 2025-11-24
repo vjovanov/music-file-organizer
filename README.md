@@ -4,7 +4,7 @@ Recognize your music files using Shazam-based recognition, then copy or move fil
 
 ## 🚀 Quick Start
 
-You will need the shazamio python package:
+You will need the `shazamio` python package:
 
 ```bash
 pip install shazamio

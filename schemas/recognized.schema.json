@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/recognized.schema.json",
+  "title": "Batch Shazam Recognition Results",
+  "description": "Mapping of absolute source file paths to recognized track metadata (author, album, song).",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri-reference",
+      "description": "JSON Schema reference"
+    }
+  },
+  "unevaluatedProperties": {
+    "$ref": "#/$defs/TrackRecognition"
+  },
+  "$defs": {
+    "TrackRecognition": {
+      "type": "object",
+      "properties": {
+        "author": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Primary artist/author name, taken from Shazam track.subtitle"
+        },
+        "album": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Album title if available, otherwise null"
+        },
+        "song": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Track title, taken from Shazam track.title"
+        },
+        "author_unknown": {
+          "type": "boolean",
+          "description": "True if the author field represents an unknown placeholder."
+        },
+        "album_unknown": {
+          "type": "boolean",
+          "description": "True if the album field is unknown or missing."
+        },
+        "song_unknown": {
+          "type": "boolean",
+          "description": "True if the song field represents an unknown placeholder."
+        },
+        "artist_adamid": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Apple artist ID (adamid) for disambiguation"
+        },
+        "release_year": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Release year"
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Record label name"
+        },
+        "genre_primary": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Primary genre"
+        },
+        "isrc": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "International Standard Recording Code"
+        },
+        "explicit": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Explicit content flag"
+        },
+        "applemusic_track_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Apple Music track ID"
+        },
+        "applemusic_album_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Apple Music album ID"
+        },
+        "coverart_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri",
+          "description": "Cover art URL (standard)"
+        },
+        "coverart_hq_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri",
+          "description": "Cover art URL (high quality)"
+        },
+        "artist_image_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri",
+          "description": "Artist image/background URL"
+        },
+        "joecolor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Color palette code from Shazam images.joecolor"
+        },
+        "tagged_timestamp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Unix timestamp when the tag was recorded"
+        },
+        "timezone": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Timezone used when the tag was recorded"
+        }
+      },
+      "required": [
+        "author",
+        "album",
+        "song"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$comment": "Object keys are absolute file paths as produced by batch_recognize.py. Each value is the recognized metadata for that file."
+}

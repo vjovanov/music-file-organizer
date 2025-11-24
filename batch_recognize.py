@@ -26,7 +26,6 @@ import sys
 from pathlib import Path
 from typing import Dict, Optional, Any, List, Tuple
 
-from shazamio import Shazam
 
 
 AUDIO_EXTENSIONS = {
@@ -124,12 +123,12 @@ def extract_metadata(out: Dict[str, Any]) -> Optional[Dict[str, Optional[str]]]:
     return {"author": author, "album": album, "song": song}
 
 
-async def recognize_file(shazam: Shazam, file_path: Path, limiter: RateLimiter, song_nr: int, total_songs: int) -> Tuple[Optional[Dict[str, Optional[str]]], Optional[str]]:
+async def recognize_file(file_path: Path, limiter: RateLimiter, song_nr: int, total_songs: int, recognizer_script: Optional[str] = None) -> Tuple[Optional[Dict[str, Optional[str]]], Optional[str]]:
     # Respect global rate limiter
     await limiter.wait()
 
     # Run single-file recognizer in a subprocess to capture and prefix its stderr (ffmpeg/shazam native output)
-    script_path = Path(__file__).parent / "recognize_one.py"
+    script_path = Path(recognizer_script) if recognizer_script else (Path(__file__).parent / "recognize_one.py")
     cmd = [sys.executable, "-u", str(script_path), str(file_path)]
 
     proc = await asyncio.create_subprocess_exec(
@@ -220,8 +219,7 @@ async def run(args) -> int:
         print("[INFO] No audio files found to process.", file=sys.stderr)
         return 0
 
-    # Initialize client & rate limiter
-    shazam = Shazam()
+    # Initialize rate limiter
     limiter = RateLimiter(args.delay)
 
     total = len(files)
@@ -237,7 +235,7 @@ async def run(args) -> int:
     async def worker(idx: int, p: Path):
         nonlocal processed, recognized_count, error_count
         async with sem:
-            meta, err = await recognize_file(shazam, p, limiter, idx, total)
+            meta, err = await recognize_file(p, limiter, idx, total, args.recognizer_script)
             async with progress_lock:
                 if meta:
                     # Augment with unknown flags for downstream organizers/schemas
@@ -370,6 +368,12 @@ def parse_args():
         "--non-recursive",
         action="store_true",
         help="Scan only the top-level of the folder (default scans recursively)",
+    )
+    ap.add_argument(
+        "--recognizer-script",
+        type=str,
+        default=None,
+        help="Path to a Python script to use instead of recognize_one.py (for testing or custom backends)",
     )
     return ap.parse_args()
 

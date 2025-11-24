@@ -2,11 +2,11 @@
 import sys
 import json
 import asyncio
-from shazamio import Shazam
 
 
 async def _recognize_once(file_path: str) -> int:
     try:
+        from shazamio import Shazam  # local import to allow tests without shazamio
         sh = Shazam()
         out = await sh.recognize(file_path)
     except Exception as e:
@@ -25,6 +25,8 @@ def main() -> int:
         print("Usage: recognize_one.py <audio_file>", file=sys.stderr)
         return 2
     file_path = sys.argv[1]
+
+
     return asyncio.run(_recognize_once(file_path))
 
 

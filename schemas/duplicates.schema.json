@@ -1,0 +1,119 @@
+{
+  "$id": "https://vjovanov.github.io/music-file-organizer/schemas/duplicates.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Music File Organizer - Duplicates Report",
+  "description": "JSON report listing detected duplicate inputs that map to the same destination key, including planned destination names and identical-content skips.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when this report was generated."
+    },
+    "pattern": {
+      "type": "string",
+      "description": "Output path pattern used for destination rendering."
+    },
+    "dest_root": {
+      "type": "string",
+      "description": "Absolute destination root directory used for planning/operations."
+    },
+    "apply": {
+      "type": "boolean",
+      "description": "Whether operations were actually applied (true) or this was a dry-run (false)."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["COPY", "MOVE"],
+      "description": "Operation mode used for planned/applied actions."
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Summary counts related to duplicate handling.",
+      "properties": {
+        "duplicate_groups": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of destination keys that had more than one valid source."
+        },
+        "distinct_duplicates_kept": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of additional non-identical duplicates kept (beyond the first unique) across all groups."
+        },
+        "identical_duplicates_skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of inputs skipped because their content matched a previously seen file in the same group."
+        }
+      },
+      "required": ["duplicate_groups", "distinct_duplicates_kept", "identical_duplicates_skipped"]
+    },
+    "groups": {
+      "type": "array",
+      "description": "Per-destination-key duplicate groups with planned outputs or identical skip notes.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dest_key": {
+            "type": "string",
+            "description": "Destination key (lower-cased destination relative path including extension)."
+          },
+          "entries": {
+            "type": "array",
+            "description": "Entries participating in this group. Each entry is either a planned destination assignment or an identical skip.",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "title": "PlannedEntry",
+                  "additionalProperties": false,
+                  "properties": {
+                    "src": {
+                      "type": "string",
+                      "description": "Absolute path to the source file."
+                    },
+                    "planned_dest_rel": {
+                      "type": "string",
+                      "description": "Planned destination path relative to dest_root."
+                    },
+                    "planned_dest_abs": {
+                      "type": "string",
+                      "description": "Planned absolute destination path."
+                    },
+                    "status": {
+                      "const": "planned",
+                      "description": "Discriminator; this entry represents a planned placement."
+                    }
+                  },
+                  "required": ["src", "planned_dest_rel", "planned_dest_abs", "status"]
+                },
+                {
+                  "type": "object",
+                  "title": "SkippedIdenticalEntry",
+                  "additionalProperties": false,
+                  "properties": {
+                    "src": {
+                      "type": "string",
+                      "description": "Absolute path to the source file that was skipped."
+                    },
+                    "status": {
+                      "const": "skipped-identical",
+                      "description": "Discriminator; this entry represents a skipped identical duplicate."
+                    }
+                  },
+                  "required": ["src", "status"]
+                }
+              ]
+            }
+          }
+        },
+        "required": ["dest_key", "entries"]
+      }
+    }
+  },
+  "required": ["generated_at", "pattern", "dest_root", "apply", "mode", "stats", "groups"]
+}

@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/shazam_input.schema.json",
+  "title": "Shazam Raw Recognition Payload",
+  "description": "Raw response object returned by shazamio.Shazam.recognize(). This schema is intentionally permissive in nested objects to remain forward-compatible with Shazam payload changes.",
+  "type": "object",
+  "properties": {
+    "matches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": ["string", "integer"] },
+          "offset": { "type": "number" },
+          "timeskew": { "type": "number" },
+          "frequencyskew": { "type": "number" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "location": {
+      "type": "object",
+      "properties": {
+        "accuracy": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "timestamp": { "type": ["integer", "number"] },
+    "timezone": { "type": "string" },
+    "track": { "$ref": "#/$defs/Track" },
+    "tagid": { "type": "string" }
+  },
+  "required": ["track"],
+  "additionalProperties": true,
+  "$defs": {
+    "Track": {
+      "type": "object",
+      "properties": {
+        "layout": { "type": ["string", "number"] },
+        "type": { "type": "string" },
+        "key": { "type": "string" },
+        "title": { "type": "string", "minLength": 1 },
+        "subtitle": { "type": "string", "minLength": 1 },
+        "images": {
+          "type": "object",
+          "properties": {
+            "background": { "type": "string", "format": "uri" },
+            "coverart": { "type": "string", "format": "uri" },
+            "coverarthq": { "type": "string", "format": "uri" },
+            "joecolor": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "share": {
+          "type": "object",
+          "properties": {
+            "subject": { "type": "string" },
+            "text": { "type": "string" },
+            "href": { "type": "string", "format": "uri" },
+            "image": { "type": "string", "format": "uri" },
+            "twitter": { "type": "string" },
+            "html": { "type": "string", "format": "uri" },
+            "avatar": { "type": "string", "format": "uri" },
+            "snapchat": { "type": "string", "format": "uri" }
+          },
+          "additionalProperties": true
+        },
+        "hub": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string" },
+            "image": { "type": "string" },
+            "actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "type": { "type": "string" },
+                  "id": { "type": "string" },
+                  "uri": { "type": "string", "format": "uri" }
+                },
+                "additionalProperties": true
+              }
+            },
+            "providers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "caption": { "type": "string" },
+                  "images": { "type": "object", "additionalProperties": true },
+                  "actions": {
+                    "type": "array",
+                    "items": { "type": "object", "additionalProperties": true }
+                  },
+                  "type": { "type": "string" }
+                },
+                "additionalProperties": true
+              }
+            },
+            "explicit": { "type": "boolean" },
+            "displayname": { "type": "string" },
+            "options": {
+              "type": "array",
+              "items": { "type": "object", "additionalProperties": true }
+            }
+          },
+          "additionalProperties": true
+        },
+        "sections": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Section" }
+        },
+        "url": { "type": "string", "format": "uri" },
+        "artists": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": ["string", "integer"] },
+              "adamid": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "genres": {
+          "type": "object",
+          "properties": {
+            "primary": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "urlparams": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "myshazam": { "type": "object", "additionalProperties": true },
+        "highlightsurls": { "type": "object", "additionalProperties": true },
+        "relatedtracksurl": { "type": "string", "format": "uri" },
+        "albumadamid": { "type": "string" },
+        "isrc": { "type": "string" }
+      },
+      "required": ["title", "subtitle"],
+      "additionalProperties": true
+    },
+    "Section": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "tabname": { "type": "string" },
+        "metapages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "image": { "type": "string", "format": "uri" },
+              "caption": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "metadata": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/MetadataItem" }
+        },
+        "url": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "MetadataItem": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "text": { "type": "string" }
+      },
+      "required": ["title", "text"],
+      "additionalProperties": false
+    }
+  }
+}
