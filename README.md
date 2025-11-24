@@ -54,17 +54,17 @@ Examples:
 
 ```bash
 # Plan COPY (dry-run)
-python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%S" -v
+python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%A - %S" -v
 ```
 
 ```bash
 # Apply COPY
-python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%S" --apply
+python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%A - %S" --apply
 ```
 
 ```bash
 # Apply MOVE instead of copy
-python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%S" --apply --move
+python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%A - %S" --apply --move
 ```
 
 Pattern placeholders 🧩:
@@ -87,13 +87,13 @@ Customize the duplicate marker:
 
 ```bash
 # Use the default marker (underscored)
-python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%S" --apply --duplicate-token "_duplicate_"
+python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%A - %S" --apply --duplicate-token "_duplicate_"
 
 # Use a compact marker
-python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%S" --apply --duplicate-token "--"
+python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%A - %S" --apply --duplicate-token "--"
 
 # Use a human-friendly marker with spaces/parentheses (will be sanitized)
-python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%S" --apply --duplicate-token " (duplicate) "
+python organize_recognized.py -i recognized-songs.json -d . -p "%A/%L/%A - %S" --apply --duplicate-token " (duplicate) "
 ```
 
 ---
@@ -145,7 +145,7 @@ Notes ℹ️
 
 ```text
 -d, --dest-root DIR            Destination root (default: .)
--p, --pattern STR              Pattern (default: "%A/%L/%S")
+-p, --pattern STR              Pattern (default: "%A/%L/%A - %S")
 --apply                        Perform the copy/move (otherwise dry-run)
 --move                         Move instead of copy
 -v, --verbose                  Print per-file actions
